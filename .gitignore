@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Environment
+.env
+*.env.local
+*.env.*.local
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Model files (large binaries - never commit)
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+
+# GCP credentials
+credentials/
+service-account*.json
+
+# Extraction scratch data
+/data/
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Tests
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Jupyter legacy
+.ipynb_checkpoints/
+EntrenamientoGuantes*
+
+# Claude Code (local only)
+.claude/
+
+# Windows artifacts (path separator artifacts)
+C*Temp*
+nul
+
+# Deployment helpers (local only)
+upload_hack.py
+
+# Build artifacts
+*.tar.gz

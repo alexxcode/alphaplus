@@ -1,0 +1,103 @@
+version: '3.9'
+
+# Shared backend config (DRY)
+x-backend: &backend
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  env_file: .env
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  # ── Reverse proxy ─────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  # ── Frontend (React 18 + Vite) ────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+  # ── Metrology Service ──────────────────────────────────────────────────────────
+  metrology:
+    build:
+      context: ./metrology_service
+      dockerfile: Dockerfile
+    ports:
+      - "8100:8100"
+    restart: unless-stopped
+
+  # ── Backend API (FastAPI) ──────────────────────────────────────────────────────
+  backend:
+    <<: *backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - METROLOGY_SERVICE_URL=http://metrology:8100
+    volumes:
+      - extraction_scratch:/data/extraction
+      - ./credentials:/app/credentials:ro
+
+  # ── Celery: dataset extraction (concurrency=1 → protege disco) ────────────────
+  worker:
+    <<: *backend
+    command: celery -A app.tasks.celery_app worker -Q dataset_extraction --concurrency=1 -l info -n worker@%h
+    volumes:
+      - extraction_scratch:/data/extraction
+      - ./credentials:/app/credentials:ro
+
+  # ── Celery: VM lifecycle + tareas generales ────────────────────────────────────
+  worker_vm:
+    <<: *backend
+    command: celery -A app.tasks.celery_app worker -Q vm_lifecycle,default --concurrency=4 -l info -n worker_vm@%h
+    volumes:
+      - ./credentials:/app/credentials:ro
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alphaplus}
+      POSTGRES_USER: ${POSTGRES_USER:-alphaplus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alphaplus}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alphaplus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis (broker Celery) ──────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  extraction_scratch:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/disks/extraction

@@ -1,0 +1,6 @@
+# Local development overrides
+# Fixes the extraction_scratch volume which normally binds to a GCP persistent disk (/mnt/disks/extraction)
+volumes:
+  extraction_scratch:
+    driver: local
+    driver_opts: {}
