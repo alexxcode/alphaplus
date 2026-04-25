@@ -24,8 +24,24 @@ def start_training_vm(
     zone = zone or settings.GCP_ZONE
     vm_name = vm_name or settings.GPU_VM_NAME
     logger.info("Starting VM %s in %s/%s", vm_name, project, zone)
-    op = _compute().instances().start(project=project, zone=zone, instance=vm_name).execute()
-    return op
+    compute = _compute()
+    op = compute.instances().start(project=project, zone=zone, instance=vm_name).execute()
+
+    # Wait for the async start operation to complete (up to 120 s)
+    op_name = op.get("name", "")
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        result = compute.zoneOperations().get(
+            project=project, zone=zone, operation=op_name
+        ).execute()
+        if result.get("status") == "DONE":
+            if "error" in result:
+                raise RuntimeError(f"VM start operation failed: {result['error']}")
+            logger.info("VM %s start operation completed", vm_name)
+            return result
+        time.sleep(2)
+
+    raise RuntimeError(f"VM start operation did not complete within 120 s")
 
 
 def stop_training_vm(

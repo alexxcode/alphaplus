@@ -135,8 +135,16 @@ def launch_training_job(self, job_id: int):
             )
 
         # ── 5. Mark training started ──────────────────────────────────────────
-        _set_job_status(db, job_id, "training", start_time=datetime.utcnow())
-        logger.info("Job %d — marked as training", job_id)
+        # Only set "training" if VM2 hasn't already updated the status
+        # (e.g. fast-completing jobs that already reported "completed"/"failed")
+        db.expire_all()
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if job and job.status not in ("completed", "failed"):
+            _set_job_status(db, job_id, "training", start_time=datetime.utcnow())
+            logger.info("Job %d — marked as training", job_id)
+        else:
+            logger.info("Job %d — VM already reported status '%s', skipping training mark", job_id, job.status if job else "unknown")
+            return
 
         # ── 6. Poll until VM terminates (self-shutdown after training) ────────
         deadline = time.time() + _TRAINING_TIMEOUT_S
@@ -172,9 +180,14 @@ def launch_training_job(self, job_id: int):
         job = db.query(Job).filter(Job.id == job_id).first()
         if job and job.status not in ("completed", "failed"):
             # Check GCS for training output as confirmation
-            model_prefix = f"models/{job.model_name}/v1/best.pt"
+            # Find the latest model version dynamically (not hardcoded to v1)
             try:
-                model_exists = gcs_client.blob_exists(model_prefix)
+                versions = gcs_client.get_model_versions(job.model_name)
+                if versions:
+                    latest = max(versions, key=lambda v: int(v["version"].lstrip("v")))
+                    model_exists = gcs_client.blob_exists(f"{latest['gcs_path']}best.pt")
+                else:
+                    model_exists = False
             except Exception:
                 model_exists = False
 

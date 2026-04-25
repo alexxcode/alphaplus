@@ -38,6 +38,18 @@ export const modelsApi = {
   list:        ()     => req('/models'),
   listByName:  (name) => req(`/models/${name}`),
   promote:     (id)   => req(`/models/${id}/promote`, { method: 'POST' }),
+  importExternal: async (name, modelType, ptFile) => {
+    const fd = new FormData()
+    fd.append('name', name)
+    fd.append('model_type', modelType)
+    fd.append('pt_file', ptFile)
+    const res = await fetch(`${BASE}/models/import`, { method: 'POST', body: fd })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
+      throw new Error(err.detail || `HTTP ${res.status}`)
+    }
+    return res.json()
+  },
 }
 
 // ── Inference ─────────────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # GCP Compute Engine
     GCP_PROJECT: str = ""
     GCP_ZONE: str = "us-central1-a"
-    GPU_VM_NAME: str = "alphaplus-trainer"
+    GPU_VM_NAME: str = "fabricademodelos--trainer"
     # Internal IP of VM1 (app server) — reachable from VM2 via port 80 (nginx)
     APP_VM_INTERNAL_IP: str = "10.128.0.2"
 

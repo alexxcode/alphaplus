@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { modelsApi, formatDate, BASE } from '../../api/client.js'
+
+const VALID_TYPES = ['yolo11n','yolo11s','yolo11m','yolo11l','yolo11x','yolov8n','yolov8s','yolov8m','yolov8l','yolov8x']
 
 export default function ModelRegistry() {
   const [versions, setVersions] = useState([])
@@ -7,6 +9,10 @@ export default function ModelRegistry() {
   const [error, setError]       = useState(null)
   const [promoting, setPromoting] = useState(null)
   const [toast, setToast]       = useState(null)
+  const [showImport, setShowImport] = useState(false)
+  const [importing, setImporting]   = useState(false)
+  const [importForm, setImportForm] = useState({ name: '', model_type: 'yolo11s', file: null })
+  const fileRef = useRef()
 
   async function load() {
     setLoading(true); setError(null)
@@ -22,6 +28,21 @@ export default function ModelRegistry() {
   function showToast(msg, type = 'success') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
+  }
+
+  async function handleImport(e) {
+    e.preventDefault()
+    if (!importForm.name.trim()) return showToast('Ingresa un nombre de modelo.', 'error')
+    if (!importForm.file) return showToast('Selecciona un archivo .pt.', 'error')
+    setImporting(true)
+    try {
+      await modelsApi.importExternal(importForm.name.trim(), importForm.model_type, importForm.file)
+      showToast(`Modelo "${importForm.name.trim()}" importado exitosamente.`)
+      setShowImport(false)
+      setImportForm({ name: '', model_type: 'yolo11s', file: null })
+      load()
+    } catch (e) { showToast(e.message, 'error') }
+    setImporting(false)
   }
 
   async function handlePromote(id, modelName) {
@@ -45,8 +66,80 @@ export default function ModelRegistry() {
     <div>
       <div className="page-header">
         <h2>Model Registry</h2>
-        <button className="btn btn-secondary" onClick={load}>↻ Refresh</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary" onClick={() => setShowImport(true)}>+ Importar Modelo</button>
+          <button className="btn btn-secondary" onClick={load}>↻ Refresh</button>
+        </div>
       </div>
+
+      {showImport && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={e => e.target === e.currentTarget && setShowImport(false)}>
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+            padding: 32, width: '100%', maxWidth: 460,
+          }}>
+            <h3 style={{ marginBottom: 20, color: 'var(--text-primary)' }}>Importar Modelo Externo</h3>
+            <form onSubmit={handleImport}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+                  Nombre del modelo
+                </label>
+                <input
+                  className="input"
+                  placeholder="Ej: Guantes, PiezaOK…"
+                  value={importForm.name}
+                  onChange={e => setImportForm(f => ({ ...f, name: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+                  Tipo de modelo
+                </label>
+                <select
+                  className="input"
+                  value={importForm.model_type}
+                  onChange={e => setImportForm(f => ({ ...f, model_type: e.target.value }))}
+                  style={{ width: '100%' }}
+                >
+                  {VALID_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+                  Archivo de pesos (.pt)
+                </label>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".pt"
+                  style={{ display: 'none' }}
+                  onChange={e => setImportForm(f => ({ ...f, file: e.target.files[0] || null }))}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => fileRef.current.click()}
+                  style={{ width: '100%' }}
+                >
+                  {importForm.file ? `✓ ${importForm.file.name}` : 'Seleccionar archivo…'}
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="submit" className="btn btn-primary" disabled={importing} style={{ flex: 1 }}>
+                  {importing ? <><span className="spinner" /> Importando…</> : 'Importar'}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowImport(false)} style={{ flex: 1 }}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={`alert alert-${toast.type === 'error' ? 'error' : 'success'}`}>

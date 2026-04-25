@@ -7,7 +7,7 @@ import { trainingApi } from '../../api/client.js'
 
 // ── Reusable SVG line chart ───────────────────────────────────────────────────
 
-function SvgLineChart({ data, series, title, formatY = v => v?.toFixed(3) ?? '' }) {
+function SvgLineChart({ data, series, title, formatY = v => v?.toFixed(3) ?? '', yMax: yMaxOverride }) {
   if (!data?.length) return (
     <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 13, textAlign: 'center' }}>
       No data for this chart.
@@ -35,7 +35,7 @@ function SvgLineChart({ data, series, title, formatY = v => v?.toFixed(3) ?? '' 
   const rawMin = Math.min(...allVals)
   const rawMax = Math.max(...allVals)
   const yMin = rawMin >= 0 ? 0 : rawMin * 1.1
-  const yMax = (rawMax || 1) * 1.12
+  const yMax = yMaxOverride != null ? yMaxOverride : (rawMax || 1) * 1.12
   const yRange = yMax - yMin || 1
 
   const px = e  => P.l + ((e - minX) / xRange) * cW
@@ -272,6 +272,7 @@ export default function TrainingCharts({ job, onClose }) {
                   { key: 'map50_95', color: '#8b5cf6', label: 'mAP@50-95' },
                 ]}
                 formatY={v => `${(v * 100).toFixed(1)}%`}
+                yMax={1}
               />
             </div>
 
