@@ -72,3 +72,12 @@ upload_hack.py
 
 # Build artifacts
 *.tar.gz
+
+# Internal/confidential — not for public repo
+dataset_final_expai/
+expai_evidence/
+gen_expai_doc.js
+gen_fabrica_doc.js
+gen_alphaplus_doc.js
+ALPHA_PLUS_README.md
+Models/

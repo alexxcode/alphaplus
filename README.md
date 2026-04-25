@@ -2,16 +2,14 @@
 
 **AlphaPlus** is a full-stack platform for training, evaluating, and deploying computer vision models in industrial environments. It automates the complete lifecycle of a YOLO model: from labeled dataset ingestion to a production inference REST endpoint — running on Google Cloud Platform with near-zero idle cost.
 
-Built for the **EXPAI SmartIndustry** research project (EUREKA 21028).
-
 ---
 
 ## How it works
 
 ```
  ┌──────────────┐   labeled datasets   ┌─────────────────────────────────────────────────────┐
- │    MENTAT    │ ──────────────────▶  │                Google Cloud Storage                  │
- │  (labeling)  │                      │  datasets/  │  jobs/  │  models/  │  logs/           │
+ │   Labeling   │ ──────────────────▶  │                Google Cloud Storage                  │
+ │   Platform   │                      │  datasets/  │  jobs/  │  models/  │  logs/           │
  └──────────────┘                      └──────────────────────────────────────────────────────┘
                                                ▲                        │
                         manual ZIP upload ─────┤                        │ best.pt + metrics
@@ -279,7 +277,7 @@ gs://{bucket}/
 │   └── {uuid}/upload.zip
 │
 ├── datasets/
-│   ├── {project}/             # Datasets from MENTAT (labeling platform)
+│   ├── {project}/             # Datasets synced from an external labeling platform
 │   │   └── {timestamp}/
 │   │       ├── data.yaml      # Canonical GCS paths
 │   │       ├── metadata.json
@@ -310,7 +308,7 @@ gs://{bucket}/
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/mentat` | List datasets synced from MENTAT via GCS |
+| GET | `/mentat` | List datasets synced from an external labeling platform via GCS (GCS-based auto-discovery) |
 | GET | `/manual` | List manually uploaded datasets |
 | POST | `/upload/init` | Create DB record + get GCS resumable upload URL |
 | POST | `/upload/complete` | Confirm upload, enqueue extraction task |
@@ -411,4 +409,4 @@ MIT
 
 ---
 
-*AlphaPlus — Part of EXPAI SmartIndustry (EUREKA 21028)*
+*AlphaPlus — Industrial AI Model Factory*
