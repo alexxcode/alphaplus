@@ -38,7 +38,13 @@ def get_bucket():
 # ── Dataset listing ────────────────────────────────────────────────────────────
 
 def list_mentat_datasets() -> list[dict]:
-    """List all datasets exported by MENTAT (datasets/{project}/{timestamp}/)."""
+    """
+    List datasets exported by Auto Labeling / MENTAT (datasets/{project}/{timestamp}/).
+    Excludes internal system folders: manual, gdrive.
+    """
+    # Folders that belong to other upload pipelines — never surface them here
+    _SKIP = {"manual", "gdrive"}
+
     try:
         bucket = get_bucket()
         datasets: list[dict] = []
@@ -49,14 +55,14 @@ def list_mentat_datasets() -> list[dict]:
                 # project_prefix = "datasets/project_name/"
                 parts = project_prefix.rstrip("/").split("/")
                 project_name = parts[-1]
-                if project_name == "manual":
+                if project_name in _SKIP:
                     continue
                 datasets.extend(_list_project_timestamps(bucket, project_name, project_prefix))
         return datasets
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Error listing MENTAT datasets: %s", exc)
+        logger.error("Error listing Auto Labeling datasets: %s", exc)
         return []
 
 

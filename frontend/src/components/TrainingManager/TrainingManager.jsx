@@ -52,7 +52,15 @@ export default function TrainingManager() {
         datasetsApi.listGDrive(),
       ])
       const ready = [
-        ...mentat.map(d => ({ ...d, label: `[MENTAT] ${d.project_name || d.timestamp}` })),
+        // Only Auto Labeling datasets that have a DB id (usable in training jobs)
+        ...mentat
+          .filter(d => d.id != null)
+          .map(d => {
+            const name    = d.project_name || d.timestamp || 'Sin nombre'
+            const classes = d.class_names?.length ? ` · ${d.class_names.join(', ')}` : ''
+            const images  = d.image_count  ? ` · ${d.image_count} imgs` : ''
+            return { ...d, label: `[Auto labeling] ${name}${classes}${images}` }
+          }),
         ...manual.filter(d => d.status === 'ready').map(d => ({
           ...d, label: `[Manual] ${d.project_name || d.original_filename}`,
         })),

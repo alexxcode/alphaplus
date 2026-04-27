@@ -3,7 +3,7 @@
  * Pure SVG charts, no external chart library required.
  */
 import { useEffect, useState } from 'react'
-import { trainingApi } from '../../api/client.js'
+import { trainingApi, formatDuration } from '../../api/client.js'
 
 // ── Reusable SVG line chart ───────────────────────────────────────────────────
 
@@ -170,15 +170,24 @@ export default function TrainingCharts({ job, onClose }) {
   if (!job) return null
 
   // Derived stats
-  const totalEpochs = metrics.length
-  const bestRow = metrics.reduce((best, m) => {
+  const totalEpochs    = metrics.length
+  const configEpochs   = job.config?.epochs ?? null
+  const bestMap50Row   = metrics.reduce((best, m) => {
     if (m.map50 != null && (best == null || m.map50 > best.map50)) return m
+    return best
+  }, null)
+  const bestMap5095Row = metrics.reduce((best, m) => {
+    if (m.map50_95 != null && (best == null || m.map50_95 > best.map50_95)) return m
     return best
   }, null)
   const lastRow = metrics[metrics.length - 1]
 
   const fmtPct  = v => v != null ? `${(v * 100).toFixed(1)}%` : '—'
   const fmtLoss = v => v != null ? v.toFixed(4) : '—'
+
+  const epochsLabel = configEpochs != null
+    ? `${totalEpochs} / ${configEpochs}`
+    : `${totalEpochs}`
 
   return (
     <div
@@ -241,21 +250,32 @@ export default function TrainingCharts({ job, onClose }) {
           <>
             {/* Stats row */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-              <StatCard label="Epochs recorded" value={totalEpochs} />
+              <StatCard
+                label="Epochs"
+                value={epochsLabel}
+                sub={configEpochs != null && totalEpochs < configEpochs ? 'interrupted' : 'completed'}
+              />
               <StatCard
                 label="Best mAP@50"
-                value={fmtPct(bestRow?.map50)}
-                sub={bestRow ? `epoch ${bestRow.epoch}` : null}
+                value={fmtPct(bestMap50Row?.map50)}
+                sub={bestMap50Row ? `epoch ${bestMap50Row.epoch}` : null}
               />
               <StatCard
                 label="Best mAP@50-95"
-                value={fmtPct(bestRow?.map50_95)}
+                value={fmtPct(bestMap5095Row?.map50_95)}
+                sub={bestMap5095Row ? `epoch ${bestMap5095Row.epoch}` : null}
               />
               <StatCard
                 label="Final val loss"
                 value={fmtLoss(lastRow?.val_loss)}
                 sub={`epoch ${lastRow?.epoch}`}
               />
+              {job.duration_s != null && (
+                <StatCard
+                  label="Duration"
+                  value={formatDuration(job.duration_s)}
+                />
+              )}
             </div>
 
             {/* Chart 1 — Detection Metrics */}

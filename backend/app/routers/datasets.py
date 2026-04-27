@@ -1,6 +1,7 @@
 """
 Dataset endpoints:
-  GET  /api/datasets/mentat          — list MENTAT datasets from GCS
+  GET  /api/datasets/mentat          — list MENTAT datasets (DB-registered + GCS scan)
+  POST /api/datasets/mentat/register — MENTAT notifies backend after GCS upload → creates DB record
   GET  /api/datasets/manual          — list manual datasets from DB
   POST /api/datasets/upload/init     — start a resumable GCS upload session
   POST /api/datasets/upload/complete — notify backend that upload is done → enqueue extraction
@@ -40,12 +41,140 @@ class GDriveImportRequest(BaseModel):
     project_name: str
 
 
+class MentatRegisterRequest(BaseModel):
+    """
+    Payload sent by MENTAT after it finishes uploading a dataset to GCS.
+
+    Required
+    --------
+    gcs_path      : GCS prefix where the dataset lives, e.g.
+                    "datasets/myproject/20240427T120000/"
+                    (trailing slash is normalised automatically)
+    project_name  : Human-readable project / label-session name.
+
+    Optional (enriches the DB record; inferred from GCS metadata.json if omitted)
+    --------
+    class_names   : List of class label strings, e.g. ["car", "person"].
+    image_count   : Total number of labelled images.
+    class_count   : Number of distinct classes (defaults to len(class_names)).
+    """
+    gcs_path: str
+    project_name: str
+    class_names: list[str] = None
+    image_count: int = None
+    class_count: int = None
+
+
 # ── MENTAT datasets ────────────────────────────────────────────────────────────
 
 @router.get("/mentat")
-def list_mentat_datasets():
-    """List all MENTAT-exported datasets available in GCS."""
-    return gcs_client.list_mentat_datasets()
+def list_mentat_datasets(db: Session = Depends(get_db)):
+    """
+    List MENTAT datasets.
+
+    Merges two sources so the UI always sees the full picture:
+      1. Datasets registered via POST /mentat/register (have a DB id → usable in jobs)
+      2. Datasets discovered directly from GCS (legacy / not yet registered)
+
+    DB records take precedence when both share the same gcs_path.
+    """
+    # --- source 1: DB-registered MENTAT datasets (have an id) ---
+    db_rows = (
+        db.query(Dataset)
+        .filter(Dataset.source == "mentat")
+        .order_by(Dataset.upload_date.desc())
+        .all()
+    )
+    registered_by_path = {ds.gcs_path: _dataset_to_dict(ds) for ds in db_rows}
+
+    # --- source 2: GCS scan (may include datasets not yet in DB) ---
+    gcs_datasets = gcs_client.list_mentat_datasets()
+
+    merged: list[dict] = list(registered_by_path.values())
+    seen_paths = set(registered_by_path.keys())
+
+    for gcs_ds in gcs_datasets:
+        path = gcs_ds.get("gcs_path")
+        if path not in seen_paths:
+            # Not in DB yet — surface it without an id so the UI can prompt the user
+            merged.append({**gcs_ds, "id": None})
+            seen_paths.add(path)
+
+    return merged
+
+
+@router.post("/mentat/register", status_code=201)
+def register_mentat_dataset(body: MentatRegisterRequest, db: Session = Depends(get_db)):
+    """
+    Called by MENTAT after it finishes uploading a dataset to GCS.
+
+    Creates (or returns the existing) DB record so the dataset becomes
+    immediately available as a dataset_id for training jobs.
+
+    MENTAT should call this endpoint once the GCS upload is complete.
+    The backend validates that the GCS path is reachable before persisting.
+    """
+    # Normalise trailing slash
+    gcs_path = body.gcs_path.rstrip("/") + "/"
+
+    # Idempotency: return existing record if already registered
+    existing = db.query(Dataset).filter(
+        Dataset.source == "mentat",
+        Dataset.gcs_path == gcs_path,
+    ).first()
+    if existing:
+        return _dataset_to_dict(existing)
+
+    # Validate that the GCS path is reachable (data.yaml must exist)
+    data_yaml_path = f"{gcs_path}data.yaml"
+    try:
+        reachable = gcs_client.blob_exists(data_yaml_path)
+    except Exception as exc:
+        raise HTTPException(503, f"Could not reach GCS to verify dataset: {exc}")
+    if not reachable:
+        raise HTTPException(
+            404,
+            f"data.yaml not found at gs://{data_yaml_path}. "
+            "Ensure the dataset was fully uploaded before registering.",
+        )
+
+    # Try to enrich metadata from GCS metadata.json if caller didn't provide it
+    class_names = body.class_names
+    image_count = body.image_count
+    class_count = body.class_count
+
+    if class_names is None or image_count is None:
+        try:
+            from app.services.gcs_client import _get_client
+            bucket = _get_client().bucket(__import__("app.config", fromlist=["settings"]).settings.GCS_BUCKET)
+            blob = bucket.blob(f"{gcs_path}metadata.json")
+            if blob.exists():
+                import json as _json
+                meta = _json.loads(blob.download_as_text())
+                class_names  = class_names  or meta.get("class_names")
+                image_count  = image_count  or meta.get("image_count")
+                class_count  = class_count  or meta.get("class_count")
+        except Exception:
+            pass  # metadata.json is optional — proceed with whatever the caller provided
+
+    if class_count is None and class_names is not None:
+        class_count = len(class_names)
+
+    ds = Dataset(
+        source="mentat",
+        status="ready",
+        gcs_path=gcs_path,
+        project_name=body.project_name,
+        class_names=class_names,
+        image_count=image_count,
+        class_count=class_count,
+        progress_message="Registered via MENTAT webhook.",
+    )
+    db.add(ds)
+    db.commit()
+    db.refresh(ds)
+
+    return _dataset_to_dict(ds)
 
 
 # ── Manual datasets ────────────────────────────────────────────────────────────

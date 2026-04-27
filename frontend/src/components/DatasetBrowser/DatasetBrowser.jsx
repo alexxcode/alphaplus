@@ -29,7 +29,7 @@ export default function DatasetBrowser() {
         <div className="tabs">
           <button className={`tab${activeTab === 'mentat' ? ' active' : ''}`}
             onClick={() => setActiveTab('mentat')}>
-            Etiquetado Interno
+            Auto Labeling
           </button>
           <button className={`tab${activeTab === 'manual' ? ' active' : ''}`}
             onClick={() => setActiveTab('manual')}>

@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     FRONTEND_ORIGIN: str = "http://localhost:5173"
 
+    # MENTAT integration — comma-separated origins allowed to call this API
+    # Example: "http://34.x.x.x,https://mentat.internal"
+    MENTAT_ORIGINS: str = ""
+
     # Upload limits (bytes)
     MAX_UPLOAD_SIZE_BYTES: int = 21_474_836_480  # 20 GB
     MIN_UPLOAD_SIZE_BYTES: int = 10_485_760       # 10 MB

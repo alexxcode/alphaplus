@@ -10,7 +10,7 @@ setup_logging()
 # Import models so SQLAlchemy knows about them before create_all
 from app.models import Dataset, Job, TrainingMetric, ModelVersion  # noqa: F401
 
-from app.routers import datasets, training, models_router, inference, metrology
+from app.routers import datasets, training, models_router, inference, metrology, config_router
 
 # Create all tables on startup (use Alembic migrations in production)
 Base.metadata.create_all(bind=engine)
@@ -24,9 +24,16 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+# Merge frontend + MENTAT origins (filter empty strings)
+_all_origins = [
+    o.strip()
+    for o in (settings.CORS_ORIGINS + "," + settings.MENTAT_ORIGINS).split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS.split(","),
+    allow_origins=_all_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +44,7 @@ app.include_router(training.router,      prefix="/api/training",  tags=["trainin
 app.include_router(models_router.router, prefix="/api/models",    tags=["models"])
 app.include_router(inference.router,     prefix="/api/inference",   tags=["inference"])
 app.include_router(metrology.router,     prefix="/api/metrology",   tags=["metrology"])
+app.include_router(config_router.router, prefix="/api/config",      tags=["config"])
 
 
 @app.get("/health", tags=["health"])

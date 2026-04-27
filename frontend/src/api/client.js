@@ -1,5 +1,10 @@
 export const BASE = '/api'
 
+// ── Config / discovery ────────────────────────────────────────────────────────
+export const configApi = {
+  get: () => req('/config'),
+}
+
 async function req(path, opts = {}) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...opts.headers },
@@ -14,8 +19,9 @@ async function req(path, opts = {}) {
 
 // ── Datasets ──────────────────────────────────────────────────────────────────
 export const datasetsApi = {
-  listMentat:     ()     => req('/datasets/mentat'),
-  listManual:     ()     => req('/datasets/manual'),
+  listMentat:       ()     => req('/datasets/mentat'),
+  registerMentat:   (body) => req('/datasets/mentat/register', { method: 'POST', body: JSON.stringify(body) }),
+  listManual:       ()     => req('/datasets/manual'),
   listGDrive:     ()     => req('/datasets/gdrive'),
   getStatus:      (id)   => req(`/datasets/${id}/status`),
   initUpload:     (body) => req('/datasets/upload/init',     { method: 'POST', body: JSON.stringify(body) }),
@@ -121,7 +127,7 @@ export function formatDuration(seconds) {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   const s = seconds % 60
-  if (h > 0) return `${h}h ${m}m`
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
   if (m > 0) return `${m}m ${s}s`
   return `${s}s`
 }
